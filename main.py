@@ -1,49 +1,75 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from typing import List
-import requests
+from flask import Flask, request, jsonify
 from bs4 import BeautifulSoup
+import requests
+from queue import Queue
+from threading import Thread
 
-app = FastAPI()
+app = Flask(__name__)
 
-# CORS configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Add your frontend URL here
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# To handle CORS
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
 
-def is_url_indexed(url: str) -> bool:
-    """Check if a URL is indexed by Google by performing a site search."""
+def check_index_status(url):
+    """
+    Check if a URL is indexed by searching it on Google.
+    """
+    search_url = f"https://www.google.com/search?q=site:{url}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+
     try:
-        search_url = f"https://www.google.com/search?q=site:{url}"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-        response = requests.get(search_url, headers=headers)
-
+        response = requests.get(search_url, headers=headers, timeout=10)
         if response.status_code == 200:
-            soup = BeautifulSoup(response.text, "html.parser")
-            if "did not match any documents" in response.text.lower():
-                return False
-            return True
+            soup = BeautifulSoup(response.text, 'html.parser')
+            # Look for results in the search result page
+            if "did not match any documents" in soup.text:
+                return {"url": url, "status": "Not Indexed"}
+            else:
+                return {"url": url, "status": "Indexed"}
         else:
-            return False
+            return {"url": url, "status": f"Error: HTTP {response.status_code}"}
     except Exception as e:
-        print(f"Error checking URL {url}: {e}")
-        return False
+        return {"url": url, "status": f"Error: {str(e)}"}
 
-@app.post("/check_indexation/")
-async def check_indexation(urls: List[str]):
-    """API endpoint to check indexation of multiple URLs."""
-    if not urls:
-        raise HTTPException(status_code=400, detail="No URLs provided.")
+def worker(queue, results):
+    while not queue.empty():
+        url = queue.get()
+        results.append(check_index_status(url))
+        queue.task_done()
 
+@app.route('/check-index-status', methods=['POST'])
+def check_status():
+    data = request.json
+    urls = data.get('urls', [])
+
+    if not urls or not isinstance(urls, list):
+        return jsonify({"error": "Invalid input. Please provide a list of URLs."}), 400
+
+    queue = Queue()
     results = []
-    for url in urls:
-        indexed = is_url_indexed(url)
-        results.append({"url": url, "indexed": indexed})
 
-    return {"status": "success", "results": results}
+    # Add URLs to the queue
+    for url in urls:
+        queue.put(url)
+
+    # Create threads to process the queue
+    threads = []
+    for _ in range(min(5, len(urls))):  # Limit to 5 concurrent threads
+        thread = Thread(target=worker, args=(queue, results))
+        thread.start()
+        threads.append(thread)
+
+    # Wait for all threads to finish
+    for thread in threads:
+        thread.join()
+
+    return jsonify(results)
+
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=5000)
