@@ -26,7 +26,7 @@ def is_url_indexed(url):
     except Exception as e:
         print(f"Error checking URL {url}: {e}")
         return False
-
+# created routes
 @app.route('/check_indexation', methods=['POST'])
 def check_indexation():
     data = request.json
