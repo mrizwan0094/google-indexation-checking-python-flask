@@ -1,12 +1,20 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from typing import List
 import requests
 from bs4 import BeautifulSoup
 
-app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "https://rizwan.power-devs.com"}})
+app = FastAPI()
 
-def is_url_indexed(url):
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://rizwan.power-devs.com"],  # Add your frontend URL here
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+def is_url_indexed(url: str) -> bool:
     """Check if a URL is indexed by Google by performing a site search."""
     try:
         search_url = f"https://www.google.com/search?q=site:{url}"
@@ -26,17 +34,15 @@ def is_url_indexed(url):
         print(f"Error checking URL {url}: {e}")
         return False
 
-@app.route('/check_indexation', methods=['POST'])
-def check_indexation():
-    data = request.json
-    urls = data.get('urls', [])
-    results = []
+@app.post("/check_indexation/")
+async def check_indexation(urls: List[str]):
+    """API endpoint to check indexation of multiple URLs."""
+    if not urls:
+        raise HTTPException(status_code=400, detail="No URLs provided.")
 
+    results = []
     for url in urls:
         indexed = is_url_indexed(url)
         results.append({"url": url, "indexed": indexed})
 
-    return jsonify({"status": "success", "results": results})
-
-if __name__ == '__main__':
-    app.run(debug=True)
+    return {"status": "success", "results": results}
