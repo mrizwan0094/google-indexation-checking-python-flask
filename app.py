@@ -4,7 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["https://rizwan.power-devs.com"]}})
+CORS(app, resources={r"/*": {"origins": "https://rizwan.power-devs.com"}})
 
 def is_url_indexed(url):
     """Check if a URL is indexed by Google by performing a site search."""
@@ -17,7 +17,6 @@ def is_url_indexed(url):
 
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "html.parser")
-            # Check for results in the Google search page
             if "did not match any documents" in response.text.lower():
                 return False
             return True
@@ -26,7 +25,7 @@ def is_url_indexed(url):
     except Exception as e:
         print(f"Error checking URL {url}: {e}")
         return False
-# created routes
+
 @app.route('/check_indexation', methods=['POST'])
 def check_indexation():
     data = request.json
