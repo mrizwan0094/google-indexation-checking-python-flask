@@ -8,7 +8,7 @@ from flask_cors import CORS
 app = Flask(__name__)
 
 # Enable CORS using Flask-CORS
-CORS(app, resources={r"/check-index-status": {"origins": ["https://rizwan.power-devs.com"]}})
+CORS(app)
 
 def check_index_status(url):
     """
