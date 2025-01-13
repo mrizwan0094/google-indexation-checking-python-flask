@@ -3,16 +3,12 @@ from bs4 import BeautifulSoup
 import requests
 from queue import Queue
 from threading import Thread
+from flask_cors import CORS
 
 app = Flask(__name__)
 
-# To handle CORS
-@app.after_request
-def add_cors_headers(response):
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-    return response
+# Enable CORS using Flask-CORS
+CORS(app, resources={r"/check-index-status": {"origins": ["https://rizwan.power-devs.com"]}})
 
 def check_index_status(url):
     """
@@ -43,8 +39,17 @@ def worker(queue, results):
         results.append(check_index_status(url))
         queue.task_done()
 
-@app.route('/check-index-status', methods=['POST'])
+@app.route('/check-index-status', methods=['POST', 'OPTIONS'])
 def check_status():
+    # Handle preflight request
+    if request.method == 'OPTIONS':
+        response = jsonify()
+        response.headers['Access-Control-Allow-Origin'] = 'https://rizwan.power-devs.com'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response, 200
+
+    # Handle POST request
     data = request.json
     urls = data.get('urls', [])
 
